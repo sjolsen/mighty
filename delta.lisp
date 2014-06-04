@@ -53,7 +53,7 @@
 
 (defun reset-visitedness (L)
   (when (delta-recursivep L)
-    (when (sj-lisp:exchangef (delta-visited L) nil)
+    (when (exchangef (delta-visited L) nil)
       (reset-visitedness (left L))
       (reset-visitedness (right L)))))
 
@@ -187,11 +187,11 @@
                     (delta L))
                    ((delta-fixed L)
                     (delta-cache L))
-                   ((sj-lisp:exchangef (delta-visited L) t)
+                   ((exchangef (delta-visited L) t)
                     (delta-cache L))
                    (t
                     (multiple-value-bind (new-delta changed1) (delta L)
-                      (let ((changed2 (sj-lisp:setf->changed (delta-cache L) new-delta)))
+                      (let ((changed2 (setf->changed (delta-cache L) new-delta)))
                         (when (eql new-delta t) ;; Optimization - at the top of the lattice
                           (setf (delta-fixed L) t))
                         (values new-delta (or changed1 changed2))))))))

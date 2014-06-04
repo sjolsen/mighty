@@ -32,7 +32,7 @@
                (make-instance
                  (cond ((< p 45) 'alternate-language)
                        ((< p 90) 'catenate-language)
-                       ((< p 95)  'empty-language)
+                       ((< p 95) 'empty-language)
                        (t        'null-language))))))
     (let ((v (make-array n :element-type '(or language null))))
       (loop

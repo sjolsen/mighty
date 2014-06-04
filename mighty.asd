@@ -1,15 +1,5 @@
-(asdf:defsystem #:mighty
-  :defsystem-depends-on (#:sj-lisp)
-  :components ((:file "delta")
-               (:file "test-case"
-                      :depends-on ("delta"))))
-
 (defpackage #:mighty
   (:use #:cl)
-  (:import-from #:sj-lisp
-                #:exchangef
-                #:setf->changed
-                #:with-hygienic-names)
   (:export ;; delta
            #:language
            #:empty-language
@@ -28,3 +18,14 @@
            #:lreset-all
            #:verify
            #:verify-all))
+
+(asdf:defsystem #:mighty
+  :defsystem-depends-on (#:sj-lisp)
+  :components ((:file "delta")
+               (:file "test-case"
+                      :depends-on ("delta"))))
+
+(in-package :mighty)
+(import '(sj-lisp:exchangef
+          sj-lisp:setf->changed
+          sj-lisp:with-hygienic-names))
