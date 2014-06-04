@@ -1,3 +1,9 @@
+;;;; Testing for nullability
+
+(in-package #:mighty)
+
+
+
 (defmethod print-object :around ((o language) str)
   (declare (ignore o str))
   (let ((*print-circle* t)

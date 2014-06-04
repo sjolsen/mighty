@@ -1,9 +1,8 @@
-(require '#:sj-lisp)
+;;;; Basic stuff for nullablility
 
-(eval-when (:compile-toplevel)
-  (import '(sj-lisp:exchangef
-            sj-lisp:setf->changed
-            sj-lisp:with-hygienic-names)))
+(in-package #:mighty)
+
+
 
 (defclass language ()
   ())
