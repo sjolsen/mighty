@@ -106,12 +106,11 @@
                    ((sj-lisp:exchangef (delta-visited L) t)
                     (delta-cache L))
                    (t
-                    (sj-lisp:multiple-value-let* ((new-delta changed1 (delta L))
-                                                  (changed2
-                                                   (sj-lisp:setf->changed (delta-cache L) new-delta)))
-                      (when (eql new-delta t) ;; Optimization - at the top of the lattice
-                        (setf (delta-fixed L) t))
-                      (values new-delta (or changed1 changed2)))))))
+                    (multiple-value-bind (new-delta changed1) (delta L)
+                      (let ((changed2 (sj-lisp:setf->changed (delta-cache L) new-delta)))
+                        (when (eql new-delta t) ;; Optimization - at the top of the lattice
+                          (setf (delta-fixed L) t))
+                        (values new-delta (or changed1 changed2))))))))
     (multiple-value-bind (result changed)
         (delta/changed L)
       (reset-visitedness L)
