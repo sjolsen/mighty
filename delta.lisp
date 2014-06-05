@@ -171,19 +171,19 @@
 ;;;     bet it's doable.
 ;;;
 ;;;     With respect to the stackless optimization mentioned above… maybe.
-;;;     Hopfully it can be done without poorly reinventing half of Common Lisp.
+;;;     Hopefully it can be done without poorly reinventing half of Common Lisp.
 ;;;
 (defun nullablep (L)
   (labels ((delta-would-recurse (L)
              (and (delta-recursivep L)
-                  (not (delta-fixed L))
-                  (not (delta-visited L))))
+                  (not (delta-visited L))
+                  (not (delta-fixed L))))
            (delta (L)
              (declare (ftype (function (language) (values boolean boolean)) delta/changed))
              (macrolet ((combine-L (combine)
                           (let ((delta-left  `(delta/changed (left L)))
                                 (delta-right `(delta/changed (right L))))
-                            `(if (delta-would-recurse (right L))
+                            `(if (delta-would-recurse (right L)) ;; Optimization - only recurse if necessary
                                  (,combine ,delta-left  ,delta-right)
                                  (,combine ,delta-right ,delta-left)))))
                (etypecase L
