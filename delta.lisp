@@ -190,19 +190,8 @@
              (labels ((delta-would-recurse (L)
                         (and (delta-recursivep L)
                              (not (delta-visited L))
-                             (not (delta-fixed L)))))
-               (cond ((not (delta-would-recurse L))
-                      (do-continuation caller changed))
-                     ((delta-would-recurse (right L))
-                      (setf (delta-continuation L) :other-right)
-                      (setf (delta-visited L) caller)
-                      (run->changed (left L) L changed))
-                     (t
-                      (setf (delta-continuation L) :other-left)
-                      (setf (delta-visited L) caller)
-                      (run->changed (right L) L changed)))))
-           (do-continuation (L changed)
-             (labels ((should-short-circuit (L child)
+                             (not (delta-fixed L))))
+                      (should-short-circuit (L child)
                         (etypecase L
                           (alternate-language (delta-base child))
                           (catenate-language (not (delta-base child)))))
@@ -212,24 +201,47 @@
                                                   (delta-base (right L))))
                           (catenate-language (and (delta-base (left L))
                                                   (delta-base (right L)))))))
-               (if (eq L :root)
-                   changed
-                 (ecase (delta-continuation L)
-                   (:other-right
-                    (setf (delta-continuation L) :combine)
-                    (if (should-short-circuit L (left L))
-                        (do-continuation L changed)
-                      (run->changed (right L) L changed)))
-                   (:other-left
-                    (setf (delta-continuation L) :combine)
-                    (if (should-short-circuit L (right L))
-                        (do-continuation L changed)
-                      (run->changed (left L) L changed)))
-                   (:combine
-                    (let* ((new-delta (combine-child-deltas L))
-                           (changed-here (setf->changed (delta-cache L) new-delta)))
-                      (setf (delta-fixed L) new-delta) ;; Optimization - at the top of the lattice
-                      (do-continuation (delta-visited L) (or changed changed-here)))))))))
+               (macrolet ((run->changed (L caller changed)
+                            `(progn
+                               (setf (values L caller changed)
+                                     (values ,L ,caller ,changed))
+                               (go run->changed-tag)))
+                          (do-continuation (L changed)
+                            `(progn
+                               (setf (values L changed)
+                                     (values ,L ,changed))
+                               (go do-continuation-tag))))
+                 (tagbody
+                  run->changed-tag
+                    (cond ((not (delta-would-recurse L))
+                           (do-continuation caller changed))
+                          ((delta-would-recurse (right L))
+                           (setf (delta-continuation L) :other-right)
+                           (setf (delta-visited L) caller)
+                           (run->changed (left L) L changed))
+                          (t
+                           (setf (delta-continuation L) :other-left)
+                           (setf (delta-visited L) caller)
+                           (run->changed (right L) L changed)))
+                  do-continuation-tag
+                    (if (eq L :root)
+                        changed
+                        (ecase (delta-continuation L)
+                          (:other-right
+                           (setf (delta-continuation L) :combine)
+                           (if (should-short-circuit L (left L))
+                               (do-continuation L changed)
+                             (run->changed (right L) L changed)))
+                          (:other-left
+                           (setf (delta-continuation L) :combine)
+                           (if (should-short-circuit L (right L))
+                               (do-continuation L changed)
+                             (run->changed (left L) L changed)))
+                          (:combine
+                           (let* ((new-delta (combine-child-deltas L))
+                                  (changed-here (setf->changed (delta-cache L) new-delta)))
+                             (setf (delta-fixed L) new-delta) ;; Optimization - at the top of the lattice
+                             (do-continuation (delta-visited L) (or changed changed-here)))))))))))
     (loop
        initially (reset-visitedness L)
        while (run->changed L :root nil)
