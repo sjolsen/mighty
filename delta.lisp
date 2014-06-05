@@ -55,39 +55,29 @@
           :accessor right)))
 
 (defun reset-visitedness (L)
-  (when (delta-recursivep L)
-    (when (exchangef (delta-visited L) nil)
-      (setf (delta-continuation L) nil)
-      (reset-visitedness (left L))
-      (reset-visitedness (right L)))))
+  (labels ((visitedp (L)
+             (and (delta-recursivep L)
+                  (delta-visited L)))
+           (visited-byp (L parent)
+             (and (visitedp L)
+                  (eq (delta-visited L) parent)))
+           (bottom (L)
+             (when (visitedp L)
+               (cond ((visited-byp (left L) L)
+                      (bottom (left L)))
+                     ((visited-byp (right L) L)
+                      (bottom (right L)))
+                     (t
+                      L))))
+           (clear (L)
+             (when (visitedp L)
+               (cond ((visited-byp (right L) L)
+                      (clear (bottom (right L))))
+                     (t
+                      (clear (exchangef (delta-visited L) nil)))))))
+    (clear (bottom L))))
 
 
-
-(defmacro or/or (first &rest rest)
-  (if rest
-      (with-hygienic-names (fvalue1 fvalue2 rvalue1 rvalue2)
-        `(multiple-value-bind (fvalue1 fvalue2)
-             ,first
-           (if fvalue1
-               (values fvalue1 fvalue2)
-             (multiple-value-bind (rvalue1 rvalue2)
-                 (or/or ,@rest)
-               (values (or fvalue1 rvalue1)
-                       (or fvalue2 rvalue2))))))
-    first))
-
-(defmacro and/or (first &rest rest)
-  (if rest
-      (with-hygienic-names (fvalue1 fvalue2 rvalue1 rvalue2)
-        `(multiple-value-bind (fvalue1 fvalue2)
-             ,first
-           (if (not fvalue1)
-               (values fvalue1 fvalue2)
-             (multiple-value-bind (rvalue1 rvalue2)
-                 (and/or ,@rest)
-               (values (and fvalue1 rvalue1)
-                       (or fvalue2 rvalue2))))))
-    first))
 
 ;;; This works basically the same way as the code in derp-latest, with the
 ;;; following important differences:
@@ -234,4 +224,7 @@
        initially (reset-visitedness L)
        while (run->changed L :root nil)
        do (reset-visitedness L)
-       finally (return-from nullablep (delta-base L)))))
+       finally
+         (when (delta-recursivep L)
+           (setf (delta-fixed L) t))
+         (return-from nullablep (delta-base L)))))
