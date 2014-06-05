@@ -28,9 +28,12 @@
    (delta-fixed :type boolean
                 :initform nil
                 :accessor delta-fixed)
-   (delta-visited :type boolean
+   (delta-visited :type (or language null)
                   :initform nil
-                  :accessor delta-visited)))
+                  :accessor delta-visited)
+   (delta-continuation :type symbol
+                       :initform nil
+                       :accessor delta-continuation)))
 
 (defun delta-recursivep (L)
   (typep L 'delta-recursive))
@@ -54,6 +57,7 @@
 (defun reset-visitedness (L)
   (when (delta-recursivep L)
     (when (exchangef (delta-visited L) nil)
+      (setf (delta-continuation L) nil)
       (reset-visitedness (left L))
       (reset-visitedness (right L)))))
 
@@ -174,44 +178,60 @@
 ;;;     Hopefully it can be done without poorly reinventing half of Common Lisp.
 ;;;
 (defun nullablep (L)
-  (labels ((delta-would-recurse (L)
-             (and (delta-recursivep L)
-                  (not (delta-visited L))
-                  (not (delta-fixed L))))
-           (delta (L)
-             (declare (ftype (function (language) (values boolean boolean)) delta/changed))
-             (macrolet ((combine-L (combine)
-                          (let ((delta-left  `(delta/changed (left L)))
-                                (delta-right `(delta/changed (right L))))
-                            `(if (delta-would-recurse (right L)) ;; Optimization - only recurse if necessary
-                                 (,combine ,delta-left  ,delta-right)
-                                 (,combine ,delta-right ,delta-left)))))
-               (etypecase L
-                 (empty-language     nil)
-                 (null-language      t)
-                 (terminal-language  nil)
-                 (repeat-language    t)
-                 (alternate-language (combine-L or/or))
-                 (catenate-language  (combine-L and/or)))))
-           (delta/changed (L)
-             (cond ((not (delta-recursivep L))
-                    (delta L))
-                   ((delta-fixed L)
-                    (delta-cache L))
-                   ((exchangef (delta-visited L) t)
-                    (delta-cache L))
-                   (t
-                    (multiple-value-bind (new-delta changed1) (delta L)
-                      (let ((changed2 (setf->changed (delta-cache L) new-delta)))
-                        (when (eql new-delta t) ;; Optimization - at the top of the lattice
-                          (setf (delta-fixed L) t))
-                        (values new-delta (or changed1 changed2))))))))
-    (multiple-value-bind (result changed)
-        (delta/changed L)
-      (reset-visitedness L)
-      (if changed
-          (nullablep L)
-        (progn
-          (when (delta-recursivep L)
-            (setf (delta-fixed L) t))
-          result)))))
+  (labels ((delta-base (L)
+             (etypecase L
+               (empty-language     nil)
+               (null-language      t)
+               (terminal-language  nil)
+               (repeat-language    t)
+               (alternate-language (delta-cache L))
+               (catenate-language  (delta-cache L))))
+           (run->changed (L caller changed)
+             (labels ((delta-would-recurse (L)
+                        (and (delta-recursivep L)
+                             (not (delta-visited L))
+                             (not (delta-fixed L)))))
+               (cond ((not (delta-would-recurse L))
+                      (do-continuation caller changed))
+                     ((delta-would-recurse (right L))
+                      (setf (delta-continuation L) :other-right)
+                      (setf (delta-visited L) caller)
+                      (run->changed (left L) L changed))
+                     (t
+                      (setf (delta-continuation L) :other-left)
+                      (setf (delta-visited L) caller)
+                      (run->changed (right L) L changed)))))
+           (do-continuation (L changed)
+             (labels ((should-short-circuit (L child)
+                        (etypecase L
+                          (alternate-language (delta-base child))
+                          (catenate-language (not (delta-base child)))))
+                      (combine-child-deltas (L)
+                        (etypecase L
+                          (alternate-language (or (delta-base (left L))
+                                                  (delta-base (right L))))
+                          (catenate-language (and (delta-base (left L))
+                                                  (delta-base (right L)))))))
+               (if (eq L :root)
+                   changed
+                 (ecase (delta-continuation L)
+                   (:other-right
+                    (setf (delta-continuation L) :combine)
+                    (if (should-short-circuit L (left L))
+                        (do-continuation L changed)
+                      (run->changed (right L) L changed)))
+                   (:other-left
+                    (setf (delta-continuation L) :combine)
+                    (if (should-short-circuit L (right L))
+                        (do-continuation L changed)
+                      (run->changed (left L) L changed)))
+                   (:combine
+                    (let* ((new-delta (combine-child-deltas L))
+                           (changed-here (setf->changed (delta-cache L) new-delta)))
+                      (setf (delta-fixed L) new-delta) ;; Optimization - at the top of the lattice
+                      (do-continuation (delta-visited L) (or changed changed-here)))))))))
+    (loop
+       initially (reset-visitedness L)
+       while (run->changed L :root nil)
+       do (reset-visitedness L)
+       finally (return-from nullablep (delta-base L)))))
