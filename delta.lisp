@@ -123,6 +123,16 @@
 ;;;     possible. Dynamic variables, though certainly an effective solution, are
 ;;;     not the easiest things to statically analyze.
 ;;;
+;;; - If one sublanguage of a catenate/alternate language is easily computable,
+;;;   do it first.
+;;;
+;;;     Evaluating both sublanguages' nullability isn't actually necessary in
+;;;     many cases to decide nullability for the toplevel language (i.e., the
+;;;     argument to NULLABLEP). There's a limit to how deep it's useful to look
+;;;     ahead (and a small one, too, thanks to exponential growth), but we can
+;;;     avoid a fair amount of computation just by computing the delta of (RIGHT
+;;;     L) first if it's non–delta-recursive.
+;;;
 ;;; The sum effect of these optimizations is that NULLABLEP performs _zero_
 ;;; dynamic memory allocations. In effect, the memory that would otherwise be
 ;;; dynamically allocated is preallocated in nice, high-locality slots. I'm not
@@ -132,6 +142,9 @@
 ;;; entry in a full-blown hash-table.
 ;;;
 ;;; Some other thoughts:
+;;;
+;;; - Short-circuiting the value test in AND/OR and OR/OR helps
+;;;   performance. Short-circuiting the changedness test kills it.
 ;;;
 ;;; - While this implementation does no significant additional heap allocation,
 ;;;   it munches stack like there's no tomorrow.
@@ -143,16 +156,6 @@
 ;;;     relevant information _in the language object_ and do control flow by
 ;;;     hand. How to do that, though, is unclear. It might be possible to get
 ;;;     away with just a parent pointer.
-;;;
-;;; - Another optimization would be to take advantage of short-circuiting and
-;;;   terminal sublanguages.
-;;;
-;;;     Evaluating both sublanguages' nullability isn't actually necessary to
-;;;     decide nullability for the toplevel language (i.e., the argument to
-;;;     NULLABLEP). There's a limit to how deep it's useful to look ahead (and a
-;;;     small one, too, thanks to exponential growth), but if we can avoid
-;;;     twenty thousand stack frames just by computing the delta of (RIGHT L)
-;;;     first if it's non–delta-recursive, I say it's worth a shot.
 ;;;
 ;;; - This just does language nullability. I suspect the implementation will map
 ;;;   more or less directly to parser nullability, but I wouldn't bet money on
@@ -171,17 +174,27 @@
 ;;;     Hopfully it can be done without poorly reinventing half of Common Lisp.
 ;;;
 (defun nullablep (L)
-  (labels ((delta (L)
+  (labels ((delta-would-recurse (L)
+             (and (delta-recursivep L)
+                  (not (delta-fixed L))
+                  (not (delta-visited L))))
+           (delta (L)
              (declare (ftype (function (language) (values boolean boolean)) delta/changed))
              (etypecase L
                (empty-language     nil)
                (null-language      t)
                (terminal-language  nil)
                (repeat-language    t)
-               (alternate-language (or/or (delta/changed (left L))
-                                          (delta/changed (right L))))
-               (catenate-language  (and/or (delta/changed (left L))
-                                           (delta/changed (right L))))))
+               (alternate-language (if (delta-would-recurse (right L))
+                                       (or/or (delta/changed (left L))
+                                              (delta/changed (right L)))
+                                     (or/or (delta/changed (right L))
+                                            (delta/changed (left L)))))
+               (catenate-language  (if (delta-would-recurse (right L))
+                                       (and/or (delta/changed (left L))
+                                               (delta/changed (right L)))
+                                     (and/or (delta/changed (right L))
+                                             (delta/changed (left L)))))))
            (delta/changed (L)
              (cond ((not (delta-recursivep L))
                     (delta L))
