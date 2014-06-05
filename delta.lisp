@@ -87,6 +87,13 @@
 ;;;     This is a big win on speed, and maybe not so much on space (though the
 ;;;     upper bound on space is almost certainly much better).
 ;;;
+;;; - This implementation uses bounded stack and heap space.
+;;;
+;;;     The bounded heap is the result of the last point. The particulars of the
+;;;     algorithm let us use those same metadata to eliminate stack growth for
+;;;     free (and by "free," I mean at the cost of having to manually transform
+;;;     the already-complex code into a bastardized sort of CPS).
+;;;
 ;;; - The cache is handled slightly differently (apart from the above).
 ;;;
 ;;;     The cache logic in derp is actually slightly more complex than it has to
@@ -131,7 +138,7 @@
 ;;; dynamic memory allocations. In effect, the memory that would otherwise be
 ;;; dynamically allocated is preallocated in nice, high-locality slots. I'm not
 ;;; actually sure exactly how SBCL/PCL represents class instances, but I suspect
-;;; the difference is an additional three immediate 64-bit pointers for each
+;;; the difference is an additional four immediate 64-bit pointers for each
 ;;; delta-recursive language, as opposed to who knows how much on average for an
 ;;; entry in a full-blown hash-table.
 ;;;
@@ -139,17 +146,6 @@
 ;;;
 ;;; - Short-circuiting the value test in AND/OR and OR/OR helps
 ;;;   performance. Short-circuiting the changedness test kills it.
-;;;
-;;; - While this implementation does no significant additional heap allocation,
-;;;   it munches stack like there's no tomorrow.
-;;;
-;;;     Not all is lost, though; note that at any given language L, there is
-;;;     only one dormant activation record for (DELTA L) at any given time. This
-;;;     suggests to me that the way to ensure constant stack usage (at the cost
-;;;     of still more overhead for interesting language objects) is to store the
-;;;     relevant information _in the language object_ and do control flow by
-;;;     hand. How to do that, though, is unclear. It might be possible to get
-;;;     away with just a parent pointer.
 ;;;
 ;;; - This just does language nullability. I suspect the implementation will map
 ;;;   more or less directly to parser nullability, but I wouldn't bet money on
@@ -163,9 +159,6 @@
 ;;;     happening beyond the very cyclic-graph nature of the languages, and C++
 ;;;     gives you _much_ more control over memory layout than Common Lisp, so I
 ;;;     bet it's doable.
-;;;
-;;;     With respect to the stackless optimization mentioned above… maybe.
-;;;     Hopefully it can be done without poorly reinventing half of Common Lisp.
 ;;;
 (defun nullablep (L)
   (labels ((delta-base (L)

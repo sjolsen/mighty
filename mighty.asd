@@ -6,8 +6,6 @@
            #:null-language
            #:terminal-language
            #:repeat-language
-           #:delta-recursive
-           #:delta-recursivep
            #:alternate-language
            #:catenate-language
            #:nullablep
@@ -27,5 +25,4 @@
 
 (in-package :mighty)
 (import '(sj-lisp:exchangef
-          sj-lisp:setf->changed
-          sj-lisp:with-hygienic-names))
+          sj-lisp:setf->changed))
