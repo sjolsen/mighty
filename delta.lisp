@@ -4,59 +4,44 @@
 
 
 
-(defclass language ()
-  ())
+(eval-when (:compile-toplevel :load-toplevel)
+  (defstruct empty-language)
+  (defstruct null-language))
 
-(defclass empty-language (language)
-  ())
+(unless (boundp '+empty+)
+  (defconstant +empty+ (make-empty-language)))
 
-(defclass null-language  (language)
-  ())
+(unless (boundp '+null+)
+  (defconstant +null+ (make-null-language)))
 
-(defclass terminal-language (language)
-  ())
+(defstruct (terminal-language
+             (:conc-name nil))
+  (terminal nil :read-only t))
 
-(defclass repeat-language (language)
-  ())
+(defstruct (repeat-language
+             (:conc-name nil))
+  (repeated-language +empty+ :read-only t))
+
+(defstruct (delta-recursive
+             (:conc-name nil))
+  (left +empty+)
+  (right +empty+)
+  (delta-cache nil :type boolean)
+  (delta-fixed nil :type boolean)
+  (delta-visited nil)
+  (delta-continuation nil :type symbol))
+
+(defstruct (alternate-language
+             (:include delta-recursive)))
+
+(defstruct (catenate-language
+             (:include delta-recursive)))
 
 
 
-(defclass delta-recursive ()
-  ((delta-cache :type boolean
-                :initform nil
-                :accessor delta-cache)
-   (delta-fixed :type boolean
-                :initform nil
-                :accessor delta-fixed)
-   (delta-visited :type (or language null)
-                  :initform nil
-                  :accessor delta-visited)
-   (delta-continuation :type symbol
-                       :initform nil
-                       :accessor delta-continuation)))
-
-(defun delta-recursivep (L)
-  (typep L 'delta-recursive))
-
-(defclass alternate-language (language delta-recursive)
-  ((left :type language
-         :initarg :left
-         :accessor left)
-   (right :type language
-          :initarg :right
-          :accessor right)))
-
-(defclass catenate-language (language delta-recursive)
-  ((left :type language
-         :initarg :left
-         :accessor left)
-   (right :type language
-          :initarg :right
-          :accessor right)))
-
 (defun reset-visitedness (L)
   (labels ((visitedp (L)
-             (and (delta-recursivep L)
+             (and (delta-recursive-p L)
                   (delta-visited L)))
            (visited-byp (L parent)
              (and (visitedp L)
@@ -171,7 +156,7 @@
                (catenate-language  (delta-cache L))))
            (run->changed (L caller changed)
              (labels ((delta-would-recurse (L)
-                        (and (delta-recursivep L)
+                        (and (delta-recursive-p L)
                              (not (delta-visited L))
                              (not (delta-fixed L)))))
                (cond ((not (delta-would-recurse L))
@@ -218,6 +203,6 @@
        while (run->changed L :root nil)
        do (reset-visitedness L)
        finally
-         (when (delta-recursivep L)
+         (when (delta-recursive-p L)
            (setf (delta-fixed L) t))
          (return-from nullablep (delta-base L)))))

@@ -1,7 +1,8 @@
 (defpackage #:mighty
   (:use #:cl)
   (:export ;; delta
-           #:language
+           #:+empty+
+           #:+null+
            #:empty-language
            #:null-language
            #:terminal-language
