@@ -1,4 +1,4 @@
-;;;; Basic stuff for nullablility
+;;;; Parsing with derivatives
 
 (in-package #:mighty)
 
@@ -38,6 +38,7 @@
              (:include delta-recursive)))
 
 
+;;;; Nullablility
 
 (defun reset-visitedness (L)
   (labels ((visitedp (L)
@@ -61,8 +62,6 @@
                      (t
                       (clear (exchangef (delta-visited L) nil)))))))
     (clear (bottom L))))
-
-
 
 ;;; This works basically the same way as the code in derp-latest, with the
 ;;; following important differences:
@@ -206,3 +205,6 @@
          (when (delta-recursive-p L)
            (setf (delta-fixed L) t))
          (return-from nullablep (delta-base L)))))
+
+
+;;;; Derivates
