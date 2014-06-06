@@ -1,6 +1,12 @@
 #ifndef MIGHTY_TYPES_HH
 #define MIGHTY_TYPES_HH
 
+#include <cstdint>
+#include <climits>
+#include <cstddef>
+#include <stdexcept>
+#include <string>
+
 namespace mighty
 {
 
@@ -51,59 +57,6 @@ auto type (const language* L) noexcept
 	return L->type;
 }
 
-class bad_cast
-	: public std::bad_cast
-{
-	const std::string what_str;
-
-public:
-	bad_cast (const char* expected_type,
-	          const language* datum)
-		: expected_type {expected_type},
-		  datum {datum}
-	{
-		what_str = "Wrong type; expected ";
-		what_str += expected_type;
-		what_str += "; got ";
-		what_str += print_name (type (datum));
-		what_str += " at language 0x";
-		what_str += std::to_string (static_cast <std::uintptr_t> (datum), 16);
-	}
-
-	virtual const char* what () override
-	{ return what_str.c_str (); }
-
-	virtual ~bad_cast () = default;
-};
-
-template <language_type T>
-struct downcast_language;
-
-template <>
-struct downcast_language <language_type::terminal>
-{ auto cast (const language* L) { return static_cast <const terminal_language*> (L); } };
-
-template <>
-struct downcast_language <language_type::repeat>
-{ auto cast (const language* L) { return static_cast <const repeat_language*> (L); } };
-
-template <>
-struct downcast_language <language_type::alternate>
-{ auto cast (const language* L) { return static_cast <const alternate_language*> (L); } };
-
-template <>
-struct downcast_language <language_type::catenate>
-{ auto cast (const language* L) { return static_cast <const catenate_language*> (L); } };
-
-template <language_type T>
-static inline
-auto downcast (const language* L)
-{
-	if (type (L) != T)
-		throw bad_cast (print_name (T), L);
-	return downcast_language <T>::cast (L);
-}
-
 
 //// Mixin definitions
 
@@ -111,6 +64,23 @@ struct derive_recursive
 {
 	// TODO
 };
+
+// Declare here for delta-recursive
+struct root_language
+	: language
+{
+	root_language ()
+		: language (language_type::root)
+	{
+	}
+};
+
+extern inline
+const root_language* make_root ()
+{
+	static const root_language root;
+	return &root;
+}
 
 struct delta_recursive
 {
@@ -127,7 +97,7 @@ struct delta_recursive
 	mutable bool cache = false;
 	mutable bool fixed = false;
 	mutable continuation next = continuation::start;
-	const language* mutable visitor = language::root;
+	mutable const language* visitor = make_root ();
 };
 
 
@@ -136,22 +106,44 @@ struct delta_recursive
 struct empty_language
 	: language
 {
+	empty_language ()
+		: language (language_type::empty)
+	{
+	}
 };
 
 struct null_language
 	: language
 {
+	null_language ()
+		: language (language_type::null)
+	{
+	}
 };
 
 struct terminal_language
+	: language
 {
 	// TODO - static typing
 	const void* const terminal;
+
+	terminal_language (const void* const terminal)
+		: language (language_type::terminal),
+		  terminal {terminal}
+	{
+	}
 };
 
 struct repeat_language
+	: language
 {
 	const language* const sublanguage;
+
+	repeat_language (const language* const sublanguage)
+		: language (language_type::repeat),
+		  sublanguage {sublanguage}
+	{
+	}
 };
 
 struct birecursive_language
@@ -160,7 +152,6 @@ struct birecursive_language
 	const language* const left;
 	const language* const right;
 
-	constexpr
 	birecursive_language (language_type type,
 	                      const language* left,
 	                      const language* right) noexcept
@@ -215,13 +206,6 @@ struct any_language
 //// Language constructors
 
 extern inline
-const root_language* make_root ()
-{
-	static const root_language root;
-	return &root;
-}
-
-extern inline
 const empty_language* make_empty ()
 {
 	static const empty_language empty;
@@ -258,6 +242,74 @@ const alternate_language* make_alternate (any_language* place,
 }
 
 
+
+class bad_cast
+	: public std::bad_cast
+{
+	const std::string what_str;
+
+protected:
+	static
+	std::string make_what (const char* expected_type,
+	                       const language* datum)
+	{
+		static_assert (CHAR_BIT == 8, "Who the hell uses non--eight-bit bytes?");
+		static constexpr
+		const auto addrchars = 2 * sizeof (void*);
+		char addrbuf [addrchars + 1] = {};
+		std::snprintf (addrbuf, addrchars + 1, "%p", datum);
+
+		std::string w;
+		w = "Wrong type; expected ";
+		w += expected_type;
+		w += "; got ";
+		w += print_name (type (datum));
+		w += " at language 0x";
+		w += addrbuf;
+		return w;
+	}
+
+public:
+	bad_cast (const char* expected_type,
+	          const language* datum)
+		: what_str (make_what (expected_type, datum))
+	{
+	}
+
+	virtual const char* what () const noexcept override
+	{ return what_str.c_str (); }
+
+	virtual ~bad_cast () = default;
+};
+
+template <language_type T>
+struct downcast_language;
+
+template <>
+struct downcast_language <language_type::terminal>
+{ auto cast (const language* L) { return static_cast <const terminal_language*> (L); } };
+
+template <>
+struct downcast_language <language_type::repeat>
+{ auto cast (const language* L) { return static_cast <const repeat_language*> (L); } };
+
+template <>
+struct downcast_language <language_type::alternate>
+{ auto cast (const language* L) { return static_cast <const alternate_language*> (L); } };
+
+template <>
+struct downcast_language <language_type::catenate>
+{ auto cast (const language* L) { return static_cast <const catenate_language*> (L); } };
+
+template <language_type T>
+static inline
+auto downcast (const language* L)
+{
+	if (type (L) != T)
+		throw bad_cast (print_name (T), L);
+	return downcast_language <T>::cast (L);
+}
+
 } // namespace mighty
 
 #endif
