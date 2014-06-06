@@ -65,23 +65,6 @@ struct derive_recursive
 	// TODO
 };
 
-// Declare here for delta-recursive
-struct root_language
-	: language
-{
-	root_language ()
-		: language (language_type::root)
-	{
-	}
-};
-
-extern inline
-const root_language* make_root ()
-{
-	static const root_language root;
-	return &root;
-}
-
 struct delta_recursive
 {
 	enum class continuation
@@ -97,11 +80,20 @@ struct delta_recursive
 	mutable bool cache = false;
 	mutable bool fixed = false;
 	mutable continuation next = continuation::start;
-	mutable const language* visitor = make_root ();
+	mutable const language* visitor = nullptr;
 };
 
 
 //// Concrete language definitions
+
+struct root_language
+	: language
+{
+	root_language ()
+		: language (language_type::root)
+	{
+	}
+};
 
 struct empty_language
 	: language
@@ -188,22 +180,30 @@ struct catenate_language
 	}
 };
 
-struct any_language
+union any_language
 {
-	union
+	any_language ()
 	{
-		language L;
-		empty_language _empty;
-		null_language _null;
-		terminal_language _terminal;
-		repeat_language _repeat;
-		alternate_language _alternate;
-		catenate_language _catenate;
-	};
+	}
+
+	language L;
+	empty_language _empty;
+	null_language _null;
+	terminal_language _terminal;
+	repeat_language _repeat;
+	alternate_language _alternate;
+	catenate_language _catenate;
 };
 
 
 //// Language constructors
+
+extern inline
+const root_language* make_root ()
+{
+	static const root_language root;
+	return &root;
+}
 
 extern inline
 const empty_language* make_empty ()
@@ -239,6 +239,14 @@ const alternate_language* make_alternate (any_language* place,
                                           const language* right)
 {
 	return new (&place->_alternate) alternate_language (left, right);
+}
+
+static inline
+const catenate_language* make_catenate (any_language* place,
+                                          const language* left,
+                                          const language* right)
+{
+	return new (&place->_catenate) catenate_language (left, right);
 }
 
 
@@ -287,19 +295,31 @@ struct downcast_language;
 
 template <>
 struct downcast_language <language_type::terminal>
-{ auto cast (const language* L) { return static_cast <const terminal_language*> (L); } };
+{
+	static auto cast (const language* L)
+	{ return static_cast <const terminal_language*> (L); }
+};
 
 template <>
 struct downcast_language <language_type::repeat>
-{ auto cast (const language* L) { return static_cast <const repeat_language*> (L); } };
+{
+	static auto cast (const language* L)
+	{ return static_cast <const repeat_language*> (L); }
+};
 
 template <>
 struct downcast_language <language_type::alternate>
-{ auto cast (const language* L) { return static_cast <const alternate_language*> (L); } };
+{
+	static auto cast (const language* L)
+	{ return static_cast <const alternate_language*> (L); }
+};
 
 template <>
 struct downcast_language <language_type::catenate>
-{ auto cast (const language* L) { return static_cast <const catenate_language*> (L); } };
+{
+	static auto cast (const language* L)
+	{ return static_cast <const catenate_language*> (L); }
+};
 
 template <language_type T>
 static inline
