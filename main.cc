@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <random>
-#include "mighty/types.hh"
+#include "types.hh"
 
 using namespace mighty;
 
@@ -73,27 +73,33 @@ void print_pos_or_string (const language* L, const std::vector <any_language>& t
 
 int main ()
 {
-	auto tc = make_testcase (20, std::mt19937 {});
+	auto gen = std::mt19937 {};
 
-	for (const auto& place : tc)
+	for (int i = 1; i <= 5; ++i)
 	{
-		auto L = &place.L;
+		std::cout << "Test " << i << std::endl;
 
-		std::cout << pos (L, tc) << " = ";
-		if (type (L) == language_type::alternate)
+		auto tc = make_testcase (20, gen);
+		for (const auto& place : tc)
 		{
-			std::cout << "(OR ";
-			print_pos_or_string (downcast <language_type::alternate> (L)->left, tc);
-			std::cout << " ";
-			print_pos_or_string (downcast <language_type::alternate> (L)->right, tc);
+			auto L = &place.L;
+
+			std::cout << pos (L, tc) << " = ";
+			if (type (L) == language_type::alternate)
+			{
+				std::cout << "(OR ";
+				print_pos_or_string (downcast <language_type::alternate> (L)->left, tc);
+				std::cout << " ";
+				print_pos_or_string (downcast <language_type::alternate> (L)->right, tc);
+			}
+			else
+			{
+				std::cout << "(AND ";
+				print_pos_or_string (downcast <language_type::catenate> (L)->left, tc);
+				std::cout << " ";
+				print_pos_or_string (downcast <language_type::catenate> (L)->right, tc);
+			}
+			std::cout << ")\n";
 		}
-		else
-		{
-			std::cout << "(AND ";
-			print_pos_or_string (downcast <language_type::catenate> (L)->left, tc);
-			std::cout << " ";
-			print_pos_or_string (downcast <language_type::catenate> (L)->right, tc);
-		}
-		std::cout << ")\n";
 	}
 }
