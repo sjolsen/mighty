@@ -137,6 +137,27 @@
 ;;;     gives you _much_ more control over memory layout than Common Lisp, so I
 ;;;     bet it's doable.
 ;;;
+;;; - Would it be faster (and correct for that matter) to mark all reachable
+;;;   languages as fixed in the loop finalization?
+;;;
+;;;     Intuitively, if some language is fixed, those languages on which it
+;;;     depends ought to be fixed, too. Because of the short-circuiting, though,
+;;;     I'm pretty sure that it would be incorrect to mark sublanguages as fixed
+;;;     during the top-of-the-lattice optimization.
+;;;
+;;;     For that matter, would it be better simply to omit the short-circuiting
+;;;     altogether? It would make determining nullability for _one_ language
+;;;     slower, but I suspect it would make calculating nullability for several
+;;;     languages across the graph (as one does during parsing) faster.
+;;;
+;;;     If it's at least possible for the toplevel case, it should be relatively
+;;;     cheap to do; just call a variant of RESET-VISITEDNESS in the FINALLY
+;;;     LOOP block that sets the fixedness flag. That's another place where
+;;;     calculating the nullability of one language would be made slower, but
+;;;     calculating many would be faster (in the former case, the new traversal
+;;;     would be additional, but in the latter it would simply reduce the
+;;;     initial traversal for any subsequent calculation to the base case).
+;;;
 (defun nullablep (L)
   (labels ((delta-base (L)
              (etypecase L
