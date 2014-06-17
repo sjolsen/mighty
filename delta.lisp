@@ -96,11 +96,11 @@
 ;;;
 ;;; - The logic otherwise handled by RUNNING? is cleanly separated.
 ;;;
-;;;     In the sake of generality, the original DEFINE/FIXED is designed to make
-;;;     the toplevel function a valid entry point for the internal recursive
-;;;     algorithm. Apart from hindering delicious local function optimization,
-;;;     this means that every iteration along the language chain is branching on
-;;;     a dynamically scoped value. Ick.
+;;;     In the interest of generality, the original DEFINE/FIXED is designed to
+;;;     make the toplevel function a valid entry point for the internal
+;;;     recursive algorithm. Apart from hindering delicious local function
+;;;     optimization, this means that every iteration along the language chain
+;;;     is branching on a dynamically scoped value. Ick.
 ;;;
 ;;; - Changedness is tracked through local, lexical variables.
 ;;;
@@ -120,16 +120,9 @@
 ;;;
 ;;; The sum effect of these optimizations is that NULLABLEP performs _zero_
 ;;; dynamic memory allocations. In effect, the memory that would otherwise be
-;;; dynamically allocated is preallocated in nice, high-locality slots. I'm not
-;;; actually sure exactly how SBCL/PCL represents class instances, but I suspect
-;;; the difference is an additional four immediate 64-bit pointers for each
-;;; delta-recursive language, as opposed to who knows how much on average for an
-;;; entry in a full-blown hash-table.
+;;; dynamically allocated is preallocated in nice, high-locality slots.
 ;;;
 ;;; Some other thoughts:
-;;;
-;;; - Short-circuiting the value test in AND/OR and OR/OR helps
-;;;   performance. Short-circuiting the changedness test kills it.
 ;;;
 ;;; - This just does language nullability. I suspect the implementation will map
 ;;;   more or less directly to parser nullability, but I wouldn't bet money on
@@ -207,4 +200,4 @@
          (return-from nullablep (delta-base L)))))
 
 
-;;;; Derivates
+;;;; Derivatives
