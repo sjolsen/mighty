@@ -158,6 +158,22 @@
 ;;;     would be additional, but in the latter it would simply reduce the
 ;;;     initial traversal for any subsequent calculation to the base case).
 ;;;
+;;; - Can RESET-VISITEDNESS somehow be folded into NULLABLEP?
+;;;
+;;;     Right now, we iterate over the graph twice per step in the fixpoint
+;;;     computation. This isn't exactly good for temporal locality. Ideally, we
+;;;     would eliminate the RESET-VISITEDNESS business altogether.
+;;;
+;;;     The obvious (to me) approach would be to store, in addition to the
+;;;     visitor pointer, the iteration number in each language. At some point, I
+;;;     think that just stuffing more and more things into the languages is
+;;;     going to hit a wall of diminishing returns. Maybe it would be sufficient
+;;;     to store a small-range counter and run RESET-VISITEDNESS (setting all
+;;;     counters to zero) when the counter is about to run out. This wouldn't be
+;;;     terribly difficult in C++, but Lisp is another story (I'm pretty sure,
+;;;     though not positive, that SBCL will represent, e.g., (UNSIGNED-BYTE 8)
+;;;     as a full-width fixnum in structs and classes).
+;;;
 (defun nullablep (L)
   (labels ((delta-base (L)
              (etypecase L
