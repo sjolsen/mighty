@@ -118,6 +118,11 @@
 ;;;     avoid a fair amount of computation just by computing the delta of (RIGHT
 ;;;     L) first if it's non–delta-recursive.
 ;;;
+;;;     Cursory testing (on inputs like (MAKE-TESTCASE 10000)) indicates that
+;;;     short-circuiting makes NULLABLEP over the entire testcase vector _much_
+;;;     faster. On sizes like 1000000, it's the difference between ~7 second run
+;;;     times and it taking longer than I feel like waiting for it to finish.
+;;;
 ;;; The sum effect of these optimizations is that NULLABLEP performs _zero_
 ;;; dynamic memory allocations. In effect, the memory that would otherwise be
 ;;; dynamically allocated is preallocated in nice, high-locality slots.
@@ -144,11 +149,6 @@
 ;;;     depends ought to be fixed, too. Because of the short-circuiting, though,
 ;;;     I'm pretty sure that it would be incorrect to mark sublanguages as fixed
 ;;;     during the top-of-the-lattice optimization.
-;;;
-;;;     For that matter, would it be better simply to omit the short-circuiting
-;;;     altogether? It would make determining nullability for _one_ language
-;;;     slower, but I suspect it would make calculating nullability for several
-;;;     languages across the graph (as one does during parsing) faster.
 ;;;
 ;;;     If it's at least possible for the toplevel case, it should be relatively
 ;;;     cheap to do; just call a variant of RESET-VISITEDNESS in the FINALLY
