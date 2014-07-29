@@ -238,3 +238,9 @@
 
 
 ;;;; Derivatives
+
+;;; It occurs to me that in most grammars, the majority of language objects are
+;;; going to have either just one or two derivatives or many derivatives. When
+;;; we memoize the derivative, we may want to take this into account (e.g., by
+;;; giving the lookup table a type like (OR CONS HASHMAP), where the
+;;; single-derivative case is represented as (CHAR . DERIVATIVE).
