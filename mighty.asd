@@ -1,8 +1,6 @@
 (defpackage #:mighty
   (:use #:cl)
-  (:export ;; delta
-           #:+empty+
-           #:+null+
+  (:export ;; delta2
            #:empty-language
            #:null-language
            #:terminal-language
@@ -20,9 +18,9 @@
 
 (asdf:defsystem #:mighty
   :defsystem-depends-on (#:sj-lisp)
-  :components ((:file "delta")
+  :components ((:file "delta2")
                (:file "test-case"
-                      :depends-on ("delta"))))
+                      :depends-on ("delta2"))))
 
 (in-package :mighty)
 (import '(sj-lisp:exchangef
