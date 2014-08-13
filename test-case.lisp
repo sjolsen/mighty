@@ -25,24 +25,22 @@
 
 
 (defun make-testcase (n)
-  (let ((+empty+ (make-instance 'empty-language))
-        (+null+ (make-instance 'null-language)))
-    (labels ((random-language ()
-               (let ((p (random 100)))
-                 (cond ((< p 45) (make-instance 'alternate-language))
-                       ((< p 90) (make-instance 'catenate-language))
-                       ((< p 95) +empty+)
-                       (t        +null+)))))
-      (let ((v (make-array n :element-type '(or language null))))
-        (loop
-           for i from 0 below n
-           do (setf (aref v i) (random-language)))
-        (loop
-           for L across v
-           when (delta-recursive-p L)
-             do (setf (left L) (aref v (random n))
-                      (right L) (aref v (random n))))
-        (find-if #'delta-recursive-p v)))))
+  (labels ((random-language ()
+             (let ((p (random 100)))
+               (cond ((< p 45) (make-instance 'alternate-language))
+                     ((< p 90) (make-instance 'catenate-language))
+                     ((< p 95) +empty+)
+                     (t        +null+)))))
+    (let ((v (make-array n :element-type '(or language null))))
+      (loop
+         for i from 0 below n
+         do (setf (aref v i) (random-language)))
+      (loop
+         for L across v
+         when (delta-recursive-p L)
+           do (setf (left L) (aref v (random n))
+                    (right L) (aref v (random n))))
+      (find-if #'delta-recursive-p v))))
 
 (defun map-language (f L)
   (labels ((do-it (L visited)
