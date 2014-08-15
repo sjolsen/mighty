@@ -37,17 +37,17 @@
   t)
 
 (defclass terminal-language (language)
-  ((terminal :type language
+  ((terminal :type (or language symbol)
              :initarg :terminal
              :accessor terminal)))
 
 (defclass repeat-language (compound language)
-  ((repeated-language :type language
+  ((repeated-language :type (or language symbol)
                       :initarg :repeated-language
                       :accessor repeated-language)))
 
 (defclass delta-recursive ()
-  ((left :type language
+  ((left :type (or language symbol)
          :initarg :left
          :accessor left)
    (right :type language
@@ -239,3 +239,93 @@
           (push (cons c D) (derive-cache L))
           (finish-derivative L c D)
           D))))
+
+(defun derive (L c)
+  (simplify (derive-base L c)))
+
+
+
+(defun lang-and (args)
+  (if args
+      (make-instance 'catenate-language
+                     :left (first args)
+                     :right (lang-and (rest args)))
+      +null+))
+
+(defun lang-or (args)
+  (if args
+      (make-instance 'alternate-language
+                     :left (first args)
+                     :right (lang-or (rest args)))
+      +empty+))
+
+(defun lang-char (c)
+  (make-instance 'terminal-language :terminal c))
+
+(defun lang-string (s)
+  (loop
+     for c across s
+     collecting (lang-char c) into langs
+     finally (return (lang-and langs))))
+
+(defun parse-rule (rule-body)
+  (etypecase rule-body
+    (string    (lang-string rule-body))
+    (character (lang-char rule-body))
+    (symbol    rule-body)
+    (list (ecase (car rule-body)
+            ('and (lang-and (mapcar #'parse-rule (cdr rule-body))))
+            ('or  (lang-or  (mapcar #'parse-rule (cdr rule-body))))))))
+
+(defun resolve-rule (L rule-table)
+  (etypecase L
+    (delta-recursive
+     (setf (left L)
+           (resolve-rule (left L) rule-table))
+     (setf (right L)
+           (resolve-rule (right L) rule-table))
+     L)
+    (repeat-language
+     (setf (repeated-language L)
+           (resolve-rule (repeated-language L) rule-table))
+     L)
+    (symbol
+     (multiple-value-bind (rule found)
+         (gethash L rule-table)
+       (assert found)
+       rule))
+    (language
+     L)))
+
+(defun uniquify-rules (rules)
+  (labels ((merge-rules (rules acc)
+             (cond
+               ((null rules)
+                acc)
+               ((eq (caar rules) (caar acc))
+                (setf (cdar acc)
+                      `(or ,(cdar acc) ,(cdar rules)))
+                (merge-rules (cdr rules) acc))
+               (t
+                (let ((rule (pop rules)))
+                  (merge-rules rules (push rule acc)))))))
+    (merge-rules (sort rules #'< :key (lambda (rule) (sxhash (car rule))))
+                 nil)))
+
+(defun make-grammar (S rules)
+  (let ((rule-table (make-hash-table)))
+    (loop
+       with unique-rules = (uniquify-rules rules)
+       for rule in unique-rules
+       do (setf (gethash (car rule) rule-table)
+                (parse-rule (cdr rule))))
+    (loop
+       for name being each hash-key in rule-table using (hash-value rule-body)
+       do (setf (gethash name rule-table) (resolve-rule rule-body rule-table)))
+    (gethash S rule-table)))
+
+(defun match (input L)
+  (loop
+     for c being each element of input
+     for D = (derive L c) then (derive D c)
+     finally (return (nullablep D))))
