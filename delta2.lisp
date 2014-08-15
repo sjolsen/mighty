@@ -273,9 +273,10 @@
     (string    (lang-string rule-body))
     (character (lang-char rule-body))
     (symbol    rule-body)
+    (language  rule-body)
     (list (ecase (car rule-body)
-            ('and (lang-and (mapcar #'parse-rule (cdr rule-body))))
-            ('or  (lang-or  (mapcar #'parse-rule (cdr rule-body))))))))
+            (and (lang-and (mapcar #'parse-rule (cdr rule-body))))
+            (or  (lang-or  (mapcar #'parse-rule (cdr rule-body))))))))
 
 (defun resolve-rule (L rule-table)
   (etypecase L
@@ -322,10 +323,9 @@
     (loop
        for name being each hash-key in rule-table using (hash-value rule-body)
        do (setf (gethash name rule-table) (resolve-rule rule-body rule-table)))
-    (gethash S rule-table)))
+    (simplify (gethash S rule-table))))
 
 (defun match (input L)
-  (loop
-     for c being each element of input
-     for D = (derive L c) then (derive D c)
-     finally (return (nullablep D))))
+  (if (zerop (length input))
+      (nullablep L)
+      (match (subseq input 1) (derive L (elt input 0)))))
