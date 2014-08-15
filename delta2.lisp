@@ -17,9 +17,24 @@
   ((derive-cache :type list
                  :initform nil
                  :accessor derive-cache)
+   (simple-lang :type language
+                :initform nil
+                :accessor simple-lang)
+   (simple-fixed :type boolean
+                 :initform nil
+                 :accessor simple-fixed)
    (visited :type boolean
             :initform nil
             :accessor visited)))
+
+(defmethod initialize-instance :after ((L compound) &rest initargs)
+  (setf (simple-lang L) L))
+
+(defmethod simple-lang ((L language))
+  L)
+
+(defmethod simple-fixed ((L language))
+  t)
 
 (defclass terminal-language (language)
   ((terminal :type language
@@ -51,6 +66,9 @@
 (defun delta-recursive-p (L)
   (typep L 'delta-recursive))
 
+(defmethod delta-fixed ((L language))
+  t)
+
 (defgeneric reset-visited (L)
   (:method ((L language)))
   (:method ((L delta-recursive))
@@ -60,6 +78,11 @@
       (reset-visited (right L)))))
 
 
+
+(defun full-or (&rest args)
+  (when args
+    (or (first args)
+        (apply #'full-or (rest args)))))
 
 (defgeneric delta-base (L)
   (:method ((L empty-language))    nil)
@@ -81,11 +104,11 @@
   (:method ((L delta-recursive))
     (unless (delta-fixed L)
       (when (setf->changed (visited L) t)
-        (or (run->changed (left L))
-            (run->changed (right L))
-            (setf->changed (delta-cache L)
-                           (setf (delta-fixed L)
-                                 (combine L))))))))
+        (full-or (run->changed (left L))
+                 (run->changed (right L))
+                 (setf->changed (delta-cache L)
+                                (setf (delta-fixed L)
+                                      (combine L))))))))
 
 (defgeneric nullablep (L)
   (:method ((L language))
@@ -99,6 +122,76 @@
          (return (delta-base L)))))
 
 
+
+(defgeneric simplify-base (L)
+  (:method ((L language)) L)
+  (:method ((L repeat-language))
+    (typecase (repeated-language L)
+      (empty-language  +null+) ;; {}*  => {e}
+      (null-language   +null+) ;; {e}* => {e}
+      (repeat-language (repeated-language L)) ;; L . L** => L*
+      (t               L)))
+  (:method ((L alternate-language))
+    (cond
+      ((typep (left L) 'empty-language)  (right L)) ;; L . {}|L => L
+      ((typep (right L) 'empty-language) (left L))  ;; L . L|{} => L
+      (t                                 L)))
+  (:method ((L catenate-language))
+    (typecase (left L)
+      (empty-language      +empty+)   ;; L . {}L  => {}
+      (null-language       (right L)) ;; L . {e}L => L
+      (t (typecase (right L)
+           (empty-language +empty+)   ;; L . L{}  => {}
+           (null-language  (left L))  ;; L . L{e} => L
+           (t              L))))))
+
+(defgeneric simplify->changed (L)
+  (:method ((L language))
+    nil)
+  (:method :around ((L compound))
+    (unless (simple-fixed L)
+      (when (setf->changed (visited L) t)
+        (call-next-method L))))
+  (:method ((L repeat-language))
+    (full-or (simplify->changed (repeated-language L))
+             (setf->changed (repeated-language L)
+                            (simple-lang (repeated-language L)))
+             (setf->changed (simple-lang L)
+                            (simplify-base L))))
+  (:method ((L delta-recursive))
+    (full-or (simplify->changed (left L))
+             (simplify->changed (right L))
+             (setf->changed (left L)
+                            (simple-lang (left L)))
+             (setf->changed (right L)
+                            (simple-lang (right L)))
+             (setf->changed (simple-lang L)
+                            (simplify-base L)))))
+
+(defgeneric simplify-finalize (L)
+  (:method ((L language)))
+  (:method :around ((L compound))
+    (when (setf->changed (visited L) t)
+      (setf (simple-fixed L) t)
+      (call-next-method L)))
+  (:method ((L repeat-language))
+    (simplify-finalize (repeated-language L)))
+  (:method ((L delta-recursive))
+    (simplify-finalize (left L))
+    (simplify-finalize (right L))))
+
+(defgeneric simplify (L)
+  (:method ((L language))
+    (simplify-base L))
+  (:method ((L compound))
+    (loop
+       do (setf L (simple-lang L))
+       do (reset-visited L)
+       while (simplify->changed L)
+       finally
+         (reset-visited L)
+         (simplify-finalize L)
+         (return L))))
 
 
 
