@@ -245,6 +245,10 @@
 
 
 
+(defun lang-rep (arg)
+  (make-instance 'repeat-language
+                 :repeated-language arg))
+
 (defun lang-and (args)
   (if args
       (make-instance 'catenate-language
@@ -275,6 +279,7 @@
     (symbol    rule-body)
     (language  rule-body)
     (list (ecase (car rule-body)
+            (rep (lang-rep (parse-rule (cadr rule-body))))
             (and (lang-and (mapcar #'parse-rule (cdr rule-body))))
             (or  (lang-or  (mapcar #'parse-rule (cdr rule-body))))))))
 
@@ -329,3 +334,52 @@
   (if (zerop (length input))
       (nullablep L)
       (match (subseq input 1) (derive L (elt input 0)))))
+
+
+
+(defun lang-size (L &optional (visited (make-hash-table)))
+  (if (gethash L visited)
+      0
+      (progn
+        (setf (gethash L visited) t)
+        (etypecase L
+          (repeat-language (+ 1 (lang-size (repeated-language L) visited)))
+          (delta-recursive (+ 1 (lang-size (left L) visited)
+                                (lang-size (right L) visited)))
+          (language 1)))))
+
+(defun make-graph (L filename)
+  (labels ((label-node (L)
+             (etypecase L
+               (empty-language     "{}")
+               (null-language      "{epsilon}")
+               (terminal-language  (format nil "{~A}" (terminal L)))
+               (repeat-language    "*")
+               (alternate-language "or")
+               (catenate-language  "and")))
+           (name-node (L)
+             (sxhash L))
+           (collect-nodes (L visited)
+             (if (gethash L visited)
+                 nil
+                 (progn
+                   (setf (gethash L visited) t)
+                   (etypecase L
+                     (repeat-language (list* L (collect-nodes (repeated-language L) visited)))
+                     (delta-recursive (list* L (nconc (collect-nodes (left L) visited)
+                                                      (collect-nodes (right L) visited))))
+                     (language (list L))))))
+           (print-node (stream L)
+             (let ((name  (name-node L))
+                   (label (label-node L)))
+               (format stream "  ~A [label=~W];~%" name label)
+               (typecase L
+                 (repeat-language (format stream "  ~A -> ~A;~%" name (name-node (repeated-language L))))
+                 (delta-recursive (format stream "  ~A -> ~A [tailport=\"sw\"];~%" name (name-node (left L)))
+                                  (format stream "  ~A -> ~A [tailport=\"se\"];~%" name (name-node (right L))))
+                 (t)))))
+    (with-open-file (stream filename :direction :output :if-exists :supersede)
+      (format stream "digraph G {~%")
+      (format stream "  ~A [peripheries=2];~%" (name-node L))
+      (mapcar (lambda (L) (print-node stream L)) (collect-nodes L (make-hash-table)))
+      (format stream "}~%"))))
