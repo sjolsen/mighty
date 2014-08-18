@@ -58,7 +58,13 @@
                 :accessor delta-cache)
    (delta-fixed :type boolean
                 :initform nil
-                :accessor delta-fixed)))
+                :accessor delta-fixed)
+   (empty-cache :type boolean
+                :initform t
+                :accessor empty-cache)
+   (empty-fixed :type boolean
+                :initform nil
+                :accessor empty-fixed)))
 
 (defclass alternate-language (delta-recursive compound language) ())
 (defclass catenate-language (delta-recursive compound language) ())
@@ -123,6 +129,57 @@
 
 
 
+(defgeneric empty-base (L)
+  (:method ((L empty-language))    t)
+  (:method ((L null-language))     nil)
+  (:method ((L terminal-language)) nil)
+  (:method ((L repeat-language))   nil)
+  (:method ((L delta-recursive))   (empty-cache L)))
+
+(defgeneric empty-combine (L)
+  (:method ((L alternate-language))
+    (and (empty-base (left L))
+         (empty-base (right L))))
+  (:method ((L catenate-language))
+    (or (empty-base (left L))
+        (empty-base (right L)))))
+
+(defgeneric empty->changed (L)
+  (:method ((L language)) nil)
+  (:method ((L delta-recursive))
+    (unless (empty-fixed L)
+      (when (setf->changed (visited L) t)
+        (full-or (empty->changed (left L))
+                 (empty->changed (right L))
+                 (setf->changed (empty-cache L)
+                                (not (setf (empty-fixed L)
+                                           (not (empty-combine L))))))))))
+
+(defgeneric emptyp (L)
+  (:method ((L language))
+    (empty-base L))
+  (:method ((L delta-recursive))
+    (loop
+       do (reset-visited L)
+       while (empty->changed L)
+       finally
+         (setf (empty-fixed L) t)
+         (return (empty-base L)))))
+
+
+
+(defun and/or/epsilon->repeat (L)
+  (labels ((match-or (O L)
+             (and (typep O 'alternate-language)
+                  (or (and (eq (left O) L)
+                           (typep (right O) 'null-language))
+                      (and (eq (right O) L)
+                           (typep (left O) 'null-language))))))
+    (cond
+      ((match-or (left L) L)  (make-instance 'repeat-language :repeated-language (right L)))
+      ((match-or (right L) L) (make-instance 'repeat-language :repeated-language (left L)))
+      (t nil))))
+
 (defgeneric simplify-base (L)
   (:method ((L language)) L)
   (:method ((L repeat-language))
@@ -133,17 +190,24 @@
       (t               L)))
   (:method ((L alternate-language))
     (cond
-      ((typep (left L) 'empty-language)  (right L)) ;; L . {}|L => L
-      ((typep (right L) 'empty-language) (left L))  ;; L . L|{} => L
-      (t                                 L)))
+      ((emptyp (left L))  (right L)) ;; L . {}|L => L
+      ((emptyp (right L)) (left L))  ;; L . L|{} => L
+      ((and (typep (left L) 'null-language)
+            (typep (right L) 'repeat-language)) (right L))
+      ((and (typep (right L) 'null-language)
+            (typep (left L) 'repeat-language)) (left L))
+      (t                  L)))
   (:method ((L catenate-language))
-    (typecase (left L)
-      (empty-language      +empty+)   ;; L . {}L  => {}
-      (null-language       (right L)) ;; L . {e}L => L
-      (t (typecase (right L)
-           (empty-language +empty+)   ;; L . L{}  => {}
-           (null-language  (left L))  ;; L . L{e} => L
-           (t              L))))))
+    (cond
+      ((typep (left L) 'null-language)  (right L)) ;; L . {e}L => L
+      ((typep (right L) 'null-language) (left L))  ;; L . {e}L => L
+      ((emptyp (left L))                +empty+)   ;; L . {}L  => {}
+      ((emptyp (right L))               +empty+)   ;; L . L{}  => {}
+      ((and (typep (left L) 'repeat-language)
+            (typep (right L) 'repeat-language)
+            (eq (left L) (right L))) (left L))
+      (t (let ((rep (and/or/epsilon->repeat L)))
+           (if rep rep L))))))
 
 (defgeneric simplify->changed (L)
   (:method ((L language))
